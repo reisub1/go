@@ -1,0 +1,34 @@
+package mq
+
+import (
+	mqtt "github.com/eclipse/paho.mqtt.golang"
+	// mq "github.com/surgemq/surgemq"
+	// mqService "github.com/surgemq/surgemq/service"
+)
+
+func Connect(broker string, access_token string) (*mqService.Client, error) {
+	c := &mqService.Client{}
+	msgConnPacket := mqMessage.NewConnectMessage()
+	msgConnPacket.SetVersion(4)
+	msgConnPacket.SetCleanSession(true)
+	msgConnPacket.SetClientId([]byte("tbBridge"))
+	msgConnPacket.SetKeepAlive(0)
+
+	msgConnPacket.SetUsername([]byte(access_token))
+	msgConnPacket.SetPassword([]byte("password"))
+
+	msgConnPacket.SetWillQos(0)
+	msgConnPacket.SetWillTopic([]byte("will"))
+	msgConnPacket.SetWillMessage([]byte("Willmessage"))
+
+	err := c.Connect(host, msgConnPacket)
+	return c, err
+}
+
+func Publish(c *mqService.Client, message string, topic string) {
+	pubmsg := mqMessage.NewPublishMessage()
+	pubmsg.SetTopic([]byte(topic))
+	pubmsg.SetPayload([]byte(message))
+	pubmsg.SetQoS(0)
+	c.Publish(pubmsg, nil)
+}

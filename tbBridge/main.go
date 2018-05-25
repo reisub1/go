@@ -12,9 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eclipse/paho.mqtt.golang"
 	logging "github.com/op/go-logging"
-	mqtt "github.com/reisub1/go/newServer/mqtt"
-	mqService "github.com/surgemq/surgemq/service"
+	mq "github.com/reisub1/go/tbBridge/mq"
+	wtd "github.com/reisub1/go/tbBridge/wtd"
+	// mqService "github.com/surgemq/surgemq/service"
 	evio "github.com/tidwall/evio"
 	"sync"
 )
@@ -24,13 +26,13 @@ const (
 	LISTENPORT = "8000"
 
 	// MQTTHOST       = "tcp://192.168.1.20:1883"
-	MQTTHOST       = "tcp://192.168.1.20:1883"
+	MQTTHOST       = "tcp://demo.thingsboard.io:1883"
 	TIMEDATEFORMAT = "150405:020106"
-	ACCESSTOKEN    = "x8AeRVAGkDh1s8iK0o97"
+	ACCESSTOKEN    = "qr348BYRZnzLBeK9HiVq"
 )
 
 var events evio.Events
-var c *mqService.Client
+var c *mqtt.Client
 var e error
 
 // This is a map of string[bool] to keep track of already connected devices to prevent sending redundant connect requests
@@ -45,12 +47,13 @@ func main() {
 	signalHandler()
 
 	// Connect to the MQTT broker
-	c, e = mqtt.Connect(MQTTHOST, ACCESSTOKEN)
+	c, e = mq.Connect(MQTTHOST, ACCESSTOKEN)
 	if e != nil {
 		log.Critical(e)
 		log.Notice("Are you sure MQTT Broker is up and running?")
 		os.Exit(1)
 	}
+	// Disconnect upon end
 
 	// Perform this action when the listen server on :8000 starts
 	events.Serving = func(srvin evio.Server) (_ evio.Action) {
@@ -84,25 +87,21 @@ func main() {
 func dataHandler(id int, in []byte) (out []byte, action evio.Action) {
 	message := strings.Split(string(in), "\n")[0]
 	log.Infof("Received message of length %d: %s", len(message), message)
-	if strings.Contains(message, "*ZJ#") {
+
+	var parsed *wtd.WTD
+
+	parsed, e = wtd.Parse(message)
+	if e != nil {
 		return
 	}
-
-	tokens := strings.Split(message, ",")
-	if len(tokens) == 1 {
-		log.Debugf("Invalid message(%d) received: %s", len(message), message)
-		return
-	}
-
-	uniqid := tokens[1]
 	deviceStatus.RLock()
-	currentStatus := deviceStatus.connected[uniqid]
+	currentStatus := deviceStatus.connected[parsed.Uniqid]
 	deviceStatus.RUnlock()
 	if !currentStatus {
-		deviceJson := fmt.Sprintf(`{"device": "%s"}`, uniqid)
-		mqtt.Publish(c, deviceJson, "v1/gateway/connect")
+		deviceJson := fmt.Sprintf(`{"device": "%s"}`, parsed.Uniqid)
+		mq.Publish(c, deviceJson, "v1/gateway/connect")
 		deviceStatus.Lock()
-		deviceStatus.connected[uniqid] = true
+		deviceStatus.connected[parsed.Uniqid] = true
 		deviceStatus.Unlock()
 	}
 	lat := 0.0
@@ -136,7 +135,7 @@ func dataHandler(id int, in []byte) (out []byte, action evio.Action) {
 
 	telemetryJson := fmt.Sprintf(`{"%s":[{"ts":%d,"values":{"lat":%f,"lng":%f}}]}`,
 		uniqid, ts, lat/100, lng/100)
-	mqtt.Publish(c, telemetryJson, "v1/gateway/telemetry")
+	mq.Publish(c, telemetryJson, "v1/gateway/telemetry")
 
 	return
 }
@@ -160,16 +159,13 @@ func setUpLogging() {
 
 // Handle SIGINT by sending disconnect requests to the API
 func signalHandler() {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
+	sigchan := make(chan os.Signal, 1)
+	signal.Notify(sigchan, os.Interrupt)
 	go func() {
-		for sig := range c {
+		for sig := range sigchan {
 			log.Warningf("Server closing due to Signal: %s", sig)
+			(*c).Disconnect(1000)
 			os.Exit(0)
 		}
 	}()
-}
-
-func StupidFunction(a string) {
-	fmt.Println(a)
 }

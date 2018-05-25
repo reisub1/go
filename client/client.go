@@ -20,6 +20,7 @@ func main() {
 	for {
 		Conn.Write([]byte(s))
 		fmt.Println(s)
+		fmt.Println(time.Now())
 		time.Sleep(2 * time.Second)
 	}
 }
