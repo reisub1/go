@@ -8,17 +8,14 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
-	"time"
+	"sync"
 
-	"github.com/eclipse/paho.mqtt.golang"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	logging "github.com/op/go-logging"
 	mq "github.com/reisub1/go/tbBridge/mq"
 	wtd "github.com/reisub1/go/tbBridge/wtd"
-	// mqService "github.com/surgemq/surgemq/service"
 	evio "github.com/tidwall/evio"
-	"sync"
 )
 
 const (
@@ -63,7 +60,7 @@ func main() {
 
 	// Perform this action whenever a new connection is received
 	events.Opened = func(id int, info evio.Info) (_ []byte, _ evio.Options, _ evio.Action) {
-		log.Infof("Connection %d launched %s -> %s", id, info.LocalAddr, info.RemoteAddr)
+		log.Infof("Connection %d launched %s -> %s", id, info.RemoteAddr, info.LocalAddr)
 		return
 	}
 
@@ -92,8 +89,10 @@ func dataHandler(id int, in []byte) (out []byte, action evio.Action) {
 
 	parsed, e = wtd.Parse(message)
 	if e != nil {
+		log.Infof("Parsing error: %s", e)
 		return
 	}
+
 	deviceStatus.RLock()
 	currentStatus := deviceStatus.connected[parsed.Uniqid]
 	deviceStatus.RUnlock()
@@ -104,37 +103,9 @@ func dataHandler(id int, in []byte) (out []byte, action evio.Action) {
 		deviceStatus.connected[parsed.Uniqid] = true
 		deviceStatus.Unlock()
 	}
-	lat := 0.0
-	if lat, e = strconv.ParseFloat(string(tokens[5]), 32); e != nil {
-		lat = 0.0
-		log.Errorf("Parsing error for latitude %f", lat)
-	}
-	// 7th field contains latitude direction information
-	if strings.Compare(tokens[6], "S") == 0 {
-		lat = -1 * lat
-	}
-	lng := 0.0
-	if lng, e = strconv.ParseFloat(string(tokens[7]), 32); e != nil {
-		lng = 0.0
-		log.Errorf("Parsing error for longitude %f", lng)
-	}
-	// 9th field contains longitude direction information
-	if strings.Compare(tokens[9], "W") == 0 {
-		lng = -1 * lng
-	}
-
-	timeDateString := strings.Join([]string{tokens[3], tokens[11]}, ":")
-	timestamp, e := time.Parse(TIMEDATEFORMAT, timeDateString)
-	if e != nil {
-		log.Error("Parsing error for ", timeDateString)
-	}
-	// Thingsboard expects time in miilis since epoch
-	_ = timestamp
-	// ts := timestamp.Unix() * 1000
-	ts := time.Now().Unix() * 1000
 
 	telemetryJson := fmt.Sprintf(`{"%s":[{"ts":%d,"values":{"lat":%f,"lng":%f}}]}`,
-		uniqid, ts, lat/100, lng/100)
+		parsed.Uniqid, parsed.TS_Millis, parsed.ActualLat, parsed.ActualLng)
 	mq.Publish(c, telemetryJson, "v1/gateway/telemetry")
 
 	return
