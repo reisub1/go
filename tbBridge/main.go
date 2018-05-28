@@ -47,7 +47,7 @@ func main() {
 	c, e = mq.Connect(MQTTHOST, ACCESSTOKEN)
 	if e != nil {
 		log.Critical(e)
-		log.Notice("Are you sure MQTT Broker is up and running?")
+		log.Info("Are you sure MQTT Broker is up and running?")
 		os.Exit(1)
 	}
 	// Disconnect upon end
@@ -80,7 +80,7 @@ func main() {
 }
 
 // dataHandler is the function called asynchronously upon a new Data connection from a client
-// This parses the message in the WTD Protocol format and then outputs it as JSON for the thingsboard MQTT Gateway API
+// This parses the message in the WTD Protocol format and then Publishes it as JSON for the thingsboard MQTT Gateway API
 func dataHandler(id int, in []byte) (out []byte, action evio.Action) {
 	message := strings.Split(string(in), "\n")[0]
 	log.Infof("Received message of length %d: %s", len(message), message)
