@@ -13,8 +13,8 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	logging "github.com/op/go-logging"
+	gpsparser "github.com/reisub1/go/tbBridge/gpsparser"
 	mq "github.com/reisub1/go/tbBridge/mq"
-	wtd "github.com/reisub1/go/tbBridge/wtd"
 	evio "github.com/tidwall/evio"
 )
 
@@ -31,6 +31,7 @@ const (
 var events evio.Events
 var c *mqtt.Client
 var e error
+var parsedChan chan *gpsparser.GPSParsed
 
 // This is a map of string[bool] to keep track of already connected devices to prevent sending redundant connect requests
 // This is synchronized with RWMutex to ensure concurrent access by different goroutines
@@ -51,6 +52,9 @@ func main() {
 		os.Exit(1)
 	}
 	// Disconnect upon end
+
+	parsedChan = make(chan *gpsparser.GPSParsed, 100)
+	go dispatcher(parsedChan)
 
 	// Perform this action when the listen server on :8000 starts
 	events.Serving = func(srvin evio.Server) (_ evio.Action) {
@@ -85,30 +89,32 @@ func dataHandler(id int, in []byte) (out []byte, action evio.Action) {
 	message := strings.Split(string(in), "\n")[0]
 	log.Infof("Received message of length %d: %s", len(message), message)
 
-	var parsed *wtd.WTD
-
-	parsed, e = wtd.Parse(message)
-	if e != nil {
-		log.Infof("Parsing error: %s", e)
-		return
-	}
-
-	deviceStatus.RLock()
-	currentStatus := deviceStatus.connected[parsed.Uniqid]
-	deviceStatus.RUnlock()
-	if !currentStatus {
-		deviceJson := fmt.Sprintf(`{"device": "%s"}`, parsed.Uniqid)
-		mq.Publish(c, deviceJson, "v1/gateway/connect")
-		deviceStatus.Lock()
-		deviceStatus.connected[parsed.Uniqid] = true
-		deviceStatus.Unlock()
-	}
-
-	telemetryJson := fmt.Sprintf(`{"%s":[{"ts":%d,"values":{"lat":%f,"lng":%f}}]}`,
-		parsed.Uniqid, parsed.TS_Millis, parsed.ActualLat, parsed.ActualLng)
-	mq.Publish(c, telemetryJson, "v1/gateway/telemetry")
+	go gpsparser.Parse(&message, parsedChan)
 
 	return
+}
+
+func dispatcher(workChannel chan *gpsparser.GPSParsed) {
+	for {
+		select {
+		case work := <-workChannel:
+			go func() {
+				deviceStatus.RLock()
+				currentStatus := deviceStatus.connected[work.Uniqid]
+				deviceStatus.RUnlock()
+				if !currentStatus {
+					deviceJson := fmt.Sprintf(`{"device": "%s"}`, work.Uniqid)
+					mq.Publish(c, deviceJson, "v1/gateway/connect")
+					deviceStatus.Lock()
+					deviceStatus.connected[work.Uniqid] = true
+					deviceStatus.Unlock()
+				}
+				telemetryJson := fmt.Sprintf(`{"%s":[{"ts":%d,"values":{"lat":%f,"lng":%f}}]}`,
+					work.Uniqid, work.TS_Millis, work.ActualLat, work.ActualLng)
+				mq.Publish(c, telemetryJson, "v1/gateway/telemetry")
+			}()
+		}
+	}
 }
 
 // Global log variable to provide logging
