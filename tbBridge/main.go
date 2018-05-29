@@ -128,7 +128,7 @@ func setUpLogging() {
 	}
 }
 
-// Handle SIGINT by sending disconnect requests to the API
+// Handle SIGINT by sending disconnect request to the API
 func signalHandler() {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, os.Interrupt)
