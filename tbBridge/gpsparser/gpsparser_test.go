@@ -1,13 +1,10 @@
 package gpsparser
 
 import (
-	"github.com/reisub1/go/tbBridge/gpsparser"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	// "time"
 )
-
-type GPSParsed = gpsparser.GPSParsed
 
 type testpair struct {
 	input    string
@@ -60,9 +57,18 @@ var tests = []testpair{
 
 func TestParse(t *testing.T) {
 	assert := assert.New(t)
+	c := make(chan *GPSParsed, 10)
 	for _, testCase := range tests {
-		c := make(chan *GPSParsed, 10)
-		gpsparser.Parse(&testCase.input, c)
+		Parse(&testCase.input, c)
+		// i := 0
+		// for output := range c {
+		// 	assert.Equal(testCase.expected[i].Uniqid, output.Uniqid)
+
+		// 	assert.Equal(testCase.expected[i].TS_Millis, output.TS_Millis)
+
+		// 	assert.Equal(testCase.expected[i].ActualLat, output.ActualLat)
+		// 	assert.Equal(testCase.expected[i].ActualLng, output.ActualLng)
+		// }
 		for _, expOutput := range testCase.expected {
 			output := <-c
 

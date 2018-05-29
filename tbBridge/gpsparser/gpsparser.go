@@ -88,8 +88,8 @@ AIS140Parse:
 		}
 
 		c <- g
+		log.Printf("Parsed dumped")
 	}
-	close(c)
 	// if len(fields) == 1 {
 	// 	return fmt.Errorf("Not a CSV message: %s", message)
 	// }
