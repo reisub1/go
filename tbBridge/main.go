@@ -109,7 +109,7 @@ func dispatcher(workChannel chan *gpsparser.GPSParsed) {
 					deviceStatus.connected[work.Uniqid] = true
 					deviceStatus.Unlock()
 				}
-				telemetryJson := fmt.Sprintf(`{"%s":[{"ts":%d,"values":{"lat":%f,"lng":%f}}]}`,
+				telemetryJson := fmt.Sprintf(`{"%s":[{"ts":%d,"values":{"lat":%f,"lon":%f}}]}`,
 					work.Uniqid, work.TS_Millis, work.ActualLat, work.ActualLng)
 				mq.Publish(c, telemetryJson, "v1/gateway/telemetry")
 			}()
