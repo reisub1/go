@@ -65,24 +65,16 @@ func TestParse(t *testing.T) {
 		// 	assert.Equal(testCase.expected[i].ActualLng, output.ActualLng)
 		// }
 		for _, expOutput := range testCase.expected {
-			if expOutput == (GPSParsed{}) {
-				select {
-				case output := <-c:
-					_ = output
-					t.Fail()
-				case <-time.After(10 * time.Millisecond):
-					continue
-				}
-			} else {
-				select {
-				case output := <-c:
-					assert.Equal(expOutput.Uniqid, output.Uniqid)
+			select {
+			case output := <-c:
+				assert.Equal(expOutput.Uniqid, output.Uniqid)
 
-					assert.Equal(expOutput.TS_Millis, output.TS_Millis)
+				assert.Equal(expOutput.TS_Millis, output.TS_Millis)
 
-					assert.Equal(expOutput.ActualLat, output.ActualLat)
-					assert.Equal(expOutput.ActualLng, output.ActualLng)
-				}
+				assert.Equal(expOutput.ActualLat, output.ActualLat)
+				assert.Equal(expOutput.ActualLng, output.ActualLng)
+			case <-time.After(10 * time.Millisecond):
+				assert.Nil(expOutput)
 			}
 		}
 	}
@@ -102,3 +94,27 @@ func TestParse(t *testing.T) {
 // 	}
 // 	benchoutput, bencherr = wtdo, eo
 // }
+
+type Bench []string
+
+var benchmarks = Bench{
+	"GTPL $1,867322035135813,A,290518,062804,18.709738,N,80.068397,E,0,406,309,11,0,14,1,0,26.4470#",
+	"GTPL $1,867322035135813,A,290518,062804,18.709738,S,80.068397,W,0,406,309,11,0,14,1,0,26.4470#",
+	"GTPL $1867322035135813A29051806280418.709738N80.068397E0406309110141026.4470#",
+}
+
+func BenchmarkParse(b *testing.B) {
+	c := make(chan *GPSParsed, 1000)
+	go ChanSinker(c)
+	for i := 0; i < b.N; i++ {
+		for _, input := range benchmarks {
+			Parse(&input, c)
+		}
+	}
+}
+
+func ChanSinker(c chan *GPSParsed) {
+	for {
+		_ = <-c
+	}
+}

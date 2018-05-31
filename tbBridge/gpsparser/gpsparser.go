@@ -19,20 +19,25 @@ type GPSParsed struct {
 
 const (
 	TIMEDATEFORMAT = "020106:150405"
+	DEBUGGING      = false
 )
 
 // Parse function takes in a raw string and puts its GPS data in the channel
 // Silently fails if it cannot parse
 func Parse(raw *string, c chan *GPSParsed) {
 	if *raw == "" {
-		log.Printf("Empty message received")
+		if DEBUGGING {
+			log.Printf("Empty message received")
+		}
 		return
 	}
 
 	if strings.HasPrefix(*raw, "GTPL") {
 		goto AIS140Parse
 	} else {
-		log.Printf("Invalid or unsupported protocol")
+		if DEBUGGING {
+			log.Printf("Invalid or unsupported protocol")
+		}
 		return
 	}
 
@@ -47,25 +52,33 @@ AIS140Parse:
 	for _, message := range messages {
 		fields := strings.Split(message, ",")
 		if len(fields) == 1 {
-			log.Printf("Not a CSV message: %s", message)
+			if DEBUGGING {
+				log.Printf("Not a CSV message: %s", message)
+			}
 			return
 		}
 		if len(fields) != 18 {
-			log.Printf("Incorrect number of fields in CSV: %d", len(fields))
+			if DEBUGGING {
+				log.Printf("Incorrect number of fields in CSV: %d", len(fields))
+			}
 			return
 		}
 		g.Uniqid = fields[1]
 		Yy_mm_dd_hh_mm_ss := strings.Join([]string{fields[3], fields[4]}, ":")
 		timestamp, e := time.Parse(TIMEDATEFORMAT, Yy_mm_dd_hh_mm_ss)
 		if e != nil {
-			log.Printf("%s", e)
+			if DEBUGGING {
+				log.Printf("%s", e)
+			}
 		}
 		// GPSParser returns in unix seconds, but thingsboard wants it in millis
 		g.TS_Millis = timestamp.Unix() * 1000
 
 		// 5th field contains latitude as a float
 		if lat, err := strconv.ParseFloat(string(fields[5]), 32); err != nil {
-			log.Printf("Parsing error for latitude %s", fields[5])
+			if DEBUGGING {
+				log.Printf("Parsing error for latitude %s", fields[5])
+			}
 			return
 		} else {
 			g.ActualLat = float32(lat)
@@ -77,7 +90,9 @@ AIS140Parse:
 
 		// 7th field contains longitude as a float
 		if lng, err := strconv.ParseFloat(string(fields[7]), 32); err != nil {
-			log.Printf("Parsing error for longitude %s", fields[7])
+			if DEBUGGING {
+				log.Printf("Parsing error for longitude %s", fields[7])
+			}
 			return
 		} else {
 			g.ActualLng = float32(lng)
@@ -88,7 +103,9 @@ AIS140Parse:
 		}
 
 		c <- g
-		log.Printf("Parsed dumped")
+		if DEBUGGING {
+			log.Printf("Parsed dumped")
+		}
 	}
 	// if len(fields) == 1 {
 	// 	return fmt.Errorf("Not a CSV message: %s", message)
