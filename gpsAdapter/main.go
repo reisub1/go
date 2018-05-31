@@ -19,18 +19,31 @@ import (
 )
 
 const (
+	// The IP/Port where the Legacy GPS Data is coming to
 	LISTENHOST = "0.0.0.0"
 	LISTENPORT = "8000"
 
+	// The MQTT Broker IP/Port
 	// MQTTHOST       = "tcp://192.168.1.20:1883"
-	MQTTHOST       = "tcp://127.0.0.1:1883"
+	MQTTHOST = "tcp://127.0.0.1:1883"
+
+	// Just a convenience variable containing Go's Example-driven method of parsing Time
+	// The time and date usually comes in a concatenated format
 	TIMEDATEFORMAT = "150405:020106"
-	ACCESSTOKEN    = "G5d65KPhrJkgL1CfflMa"
+
+	// The ThingsBoard access token for the Gateway device
+	ACCESSTOKEN = "G5d65KPhrJkgL1CfflMa"
 )
 
-var events evio.Events
+// This variable represents the MQTT connection that is to be persisted, and finally disconnected when the program closes
+// All communication with ThingsBoard occurs through the MQTT Api
 var c *mqtt.Client
+
+// Just for convenience sake, an empty error type
 var e error
+
+// This channel contains pointers to all successfully parsed GPS Packets
+// Another function, dispatcher, chooses one of these elements and processes it by publishing it to MQTT Broker
 var parsedChan chan *gpsparser.GPSParsed
 
 // This is a map of string[bool] to keep track of already connected devices to prevent sending redundant connect requests
@@ -51,10 +64,14 @@ func main() {
 		log.Info("Are you sure MQTT Broker is up and running?")
 		os.Exit(1)
 	}
+
 	// Disconnect upon end
 
 	parsedChan = make(chan *gpsparser.GPSParsed, 100)
 	go dispatcher(parsedChan)
+
+	// Make an empty set of events
+	var events evio.Events
 
 	// Perform this action when the listen server on :8000 starts
 	events.Serving = func(srvin evio.Server) (_ evio.Action) {
@@ -86,14 +103,22 @@ func main() {
 // dataHandler is the function called asynchronously upon a new Data connection from a client
 // This parses the message in the WTD Protocol format and then Publishes it as JSON for the thingsboard MQTT Gateway API
 func dataHandler(id int, in []byte) (out []byte, action evio.Action) {
+
+	// Assuming only messages terminated by newlines are valid
 	message := strings.Split(string(in), "\n")[0]
+
+	// Log the message for debugging
 	log.Infof("Received message of length %d: %s", len(message), message)
 
+	// Hand off the message pointer to Parse function, it will put any parsed data it finds on the
+	// parsedChannel
 	go gpsparser.Parse(&message, parsedChan)
 
+	// We are done, we can return to let the garbage collector handle this stuff
 	return
 }
 
+// This is the function that dispatches goroutines to publish the newly gained data to ThingsBoard through the MQTT Gateway API
 func dispatcher(workChannel chan *gpsparser.GPSParsed) {
 	for {
 		select {
@@ -120,6 +145,7 @@ func dispatcher(workChannel chan *gpsparser.GPSParsed) {
 // Global log variable to provide logging
 var log = logging.MustGetLogger("server")
 
+// In short this function just sets up colourful logging with a fixed format
 func setUpLogging() {
 	verbosePtr := flag.Bool("v", false, "Verbose output")
 	flag.Parse()
@@ -140,14 +166,16 @@ func setUpLogging() {
 	}
 }
 
-// Handle SIGINT by sending disconnect request to the API
+// Handle SIGINT by sending disconnect request to the MQTT Gateway Broker
 func signalHandler() {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, os.Interrupt)
 	go func() {
 		for sig := range sigchan {
 			log.Warningf("Server closing due to Signal: %s", sig)
+			// Disconnect with 1000 ms time to cleanup
 			(*c).Disconnect(1000)
+			// Exit cleanly
 			os.Exit(0)
 		}
 	}()
