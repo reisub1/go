@@ -23,9 +23,9 @@ const (
 	LISTENPORT = "8000"
 
 	// MQTTHOST       = "tcp://192.168.1.20:1883"
-	MQTTHOST       = "tcp://demo.thingsboard.io:1883"
+	MQTTHOST       = "tcp://127.0.0.1:1883"
 	TIMEDATEFORMAT = "150405:020106"
-	ACCESSTOKEN    = "qr348BYRZnzLBeK9HiVq"
+	ACCESSTOKEN    = "G5d65KPhrJkgL1CfflMa"
 )
 
 var events evio.Events
@@ -123,14 +123,20 @@ var log = logging.MustGetLogger("server")
 func setUpLogging() {
 	verbosePtr := flag.Bool("v", false, "Verbose output")
 	flag.Parse()
+	f, err := os.Create("/var/log/tbBridge.log")
+	if err != nil {
+		println("Unable to open log file, only logging to stderr")
+	}
 
 	if !*verbosePtr {
 		logStderr := logging.NewLogBackend(os.Stderr, "", 0)
+		logfile := logging.NewLogBackend(f, "", 0)
 		var format = logging.MustStringFormatter(
 			`%{color}%{id:0d} %{time:15:04:05.000} %{shortfunc} -> %{level:s} | %{message}%{color:reset}`,
 		)
 		Formatted := logging.NewBackendFormatter(logStderr, format)
-		logging.SetBackend(Formatted)
+		FormattedFile := logging.NewBackendFormatter(logfile, format)
+		logging.SetBackend(Formatted, FormattedFile)
 	}
 }
 

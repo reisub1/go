@@ -1,3 +1,5 @@
+`This is not used anymore, checkout the GPSParser module which is more general
+This is still here for legacy reasons`
 package wtd
 
 import (
