@@ -13,8 +13,8 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	logging "github.com/op/go-logging"
-	gpsparser "github.com/reisub1/go/tbBridge/gpsparser"
-	mq "github.com/reisub1/go/tbBridge/mq"
+	gpsparser "github.com/reisub1/go/gpsAdapter/gpsparser"
+	mq "github.com/reisub1/go/gpsAdapter/mq"
 	evio "github.com/tidwall/evio"
 )
 
