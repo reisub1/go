@@ -42,9 +42,9 @@ var c *mqtt.Client
 // Just for convenience sake, an empty error type
 var e error
 
-// This channel contains pointers to all successfully parsed GPS Packets
+// This channel contains pointers to all JSON Strings to be sent
 // Another function, dispatcher, chooses one of these elements and processes it by publishing it to MQTT Broker
-var parsedChan chan *gpsparser.GPSParsed
+var jsonChan chan *string
 
 // This is a map of string[bool] to keep track of already connected devices to prevent sending redundant connect requests
 // This is synchronized with RWMutex to ensure concurrent access by different goroutines
@@ -67,8 +67,8 @@ func main() {
 
 	// Disconnect upon end
 
-	parsedChan = make(chan *gpsparser.GPSParsed, 100)
-	go dispatcher(parsedChan)
+	jsonChan = make(chan *string, 100)
+	go dispatcher(jsonChan)
 
 	// Make an empty set of events
 	var events evio.Events
@@ -112,31 +112,30 @@ func dataHandler(id int, in []byte) (out []byte, action evio.Action) {
 
 	// Hand off the message pointer to Parse function, it will put any parsed data it finds on the
 	// parsedChannel
-	go gpsparser.Parse(&message, parsedChan)
+	go gpsparser.Parse(&message, jsonChan)
 
 	// We are done, we can return to let the garbage collector handle this stuff
 	return
 }
 
 // This is the function that dispatches goroutines to publish the newly gained data to ThingsBoard through the MQTT Gateway API
-func dispatcher(workChannel chan *gpsparser.GPSParsed) {
+func dispatcher(workChannel chan *string) {
 	for {
 		select {
-		case work := <-workChannel:
+		case jsonString := <-workChannel:
 			go func() {
+				uniqid := strings.SplitN(*jsonString, "\"", 3)[1]
 				deviceStatus.RLock()
-				currentStatus := deviceStatus.connected[work.Uniqid]
+				currentStatus := deviceStatus.connected[uniqid]
 				deviceStatus.RUnlock()
 				if !currentStatus {
-					deviceJson := fmt.Sprintf(`{"device": "%s"}`, work.Uniqid)
+					deviceJson := fmt.Sprintf(`{"device": "%s"}`, uniqid)
 					mq.Publish(c, deviceJson, "v1/gateway/connect")
 					deviceStatus.Lock()
-					deviceStatus.connected[work.Uniqid] = true
+					deviceStatus.connected[uniqid] = true
 					deviceStatus.Unlock()
 				}
-				telemetryJson := fmt.Sprintf(`{"%s":[{"ts":%d,"values":{"lat":%f,"lon":%f}}]}`,
-					work.Uniqid, work.TS_Millis, work.ActualLat, work.ActualLng)
-				mq.Publish(c, telemetryJson, "v1/gateway/telemetry")
+				mq.Publish(c, *jsonString, "v1/gateway/telemetry")
 			}()
 		}
 	}

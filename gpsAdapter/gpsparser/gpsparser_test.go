@@ -8,42 +8,49 @@ import (
 
 type testpair struct {
 	input    string
-	expected []GPSParsed
+	expected []string
 }
 
 var tests = []testpair{
 	//Empty message
-	{
-		input:    "",
-		expected: nil,
-	},
-	//Valid message with NE
+	// {
+	// 	input:    "",
+	// 	expected: nil,
+	// },
+	//Invalid Message
+	// {
+	// 	input:    "$1,867322035135813,A,290518,062804,18.709738,N,80.068397,E,0,406,309,11,0,14,1,0,26.4470#",
+	// 	expected: nil,
+	// },
+	// Valid single Status packet
 	{
 		input: "GTPL $1,867322035135813,A,290518,062804,18.709738,N,80.068397,E,0,406,309,11,0,14,1,0,26.4470#",
-		expected: []GPSParsed{
-			{
-				Protocol:  "AIS140",
-				Uniqid:    "867322035135813",
-				TS_Millis: 1527575284000,
-				ActualLat: 18.709738,
-				ActualLng: 80.068397,
-			},
+		expected: []string{
+			`{"867322035135813":[{"ts":1527575284000,"values":{"lat":18.709738,"lng":80.068397,"speed":0,"box":false,"bat":true,"ign":false}}]}`,
 		},
 	},
-	//Valid message with SW
+	// Valid single Status packet (SW)
 	{
 		input: "GTPL $1,867322035135813,A,290518,062804,18.709738,S,80.068397,W,0,406,309,11,0,14,1,0,26.4470#",
-		expected: []GPSParsed{
-			{
-				Protocol:  "AIS140",
-				Uniqid:    "867322035135813",
-				TS_Millis: 1527575284000,
-				ActualLat: -18.709738,
-				ActualLng: -80.068397,
-			},
+		expected: []string{
+			`{"867322035135813":[{"ts":1527575284000,"values":{"lat":-18.709738,"lng":-80.068397,"speed":0,"box":false,"bat":true,"ign":false}}]}`,
 		},
 	},
-	//No commas
+	// Ignition off Alert packet
+	{
+		input: "GTPL $2,867322035135813,A,290518,062804,18.709738,S,80.068397,W,0#",
+		expected: []string{
+			`{"867322035135813":[{"ts":1527575284000,"values":{"lat":-18.709738,"lng":-80.068397,"alert":"Ignition off"}}]}`,
+		},
+	},
+	// SOS Packet
+	{
+		input: "GTPL $9,867322035135813,A,290518,062804,18.709738,S,80.068397,W,0#",
+		expected: []string{
+			`{"867322035135813":[{"ts":1527575284000,"values":{"lat":-18.709738,"lng":-80.068397,"alert":"SOS"}}]}`,
+		},
+	},
+	// No commas
 	{
 		input:    "GTPL $1867322035135813A29051806280418.709738N80.068397E0406309110141026.4470#",
 		expected: nil,
@@ -52,7 +59,7 @@ var tests = []testpair{
 
 func TestParse(t *testing.T) {
 	assert := assert.New(t)
-	c := make(chan *GPSParsed, 10)
+	c := make(chan *string, 10)
 	for _, testCase := range tests {
 		Parse(&testCase.input, c)
 		// i := 0
@@ -67,13 +74,8 @@ func TestParse(t *testing.T) {
 		for _, expOutput := range testCase.expected {
 			select {
 			case output := <-c:
-				assert.Equal(expOutput.Uniqid, output.Uniqid)
-
-				assert.Equal(expOutput.TS_Millis, output.TS_Millis)
-
-				assert.Equal(expOutput.ActualLat, output.ActualLat)
-				assert.Equal(expOutput.ActualLng, output.ActualLng)
-			case <-time.After(10 * time.Millisecond):
+				assert.Equal(expOutput, *output)
+			case <-time.After(1 * time.Millisecond):
 				assert.Nil(expOutput)
 			}
 		}
@@ -104,7 +106,7 @@ var benchmarks = Bench{
 }
 
 func BenchmarkParse(b *testing.B) {
-	c := make(chan *GPSParsed, 1000)
+	c := make(chan *string, 1000)
 	go ChanSinker(c)
 	for i := 0; i < b.N; i++ {
 		for _, input := range benchmarks {
@@ -113,8 +115,8 @@ func BenchmarkParse(b *testing.B) {
 	}
 }
 
-func ChanSinker(c chan *GPSParsed) {
+func ChanSinker(c chan *string) {
 	for {
-		_ = <-c
+		<-c
 	}
 }
