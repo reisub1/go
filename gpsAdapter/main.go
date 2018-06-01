@@ -105,7 +105,7 @@ func main() {
 func dataHandler(id int, in []byte) (out []byte, action evio.Action) {
 
 	// Assuming only messages terminated by newlines are valid
-	message := strings.Split(string(in), "\n")[0]
+	message := strings.TrimRight(string(in), "\n")
 
 	// Log the message for debugging
 	log.Infof("Received message of length %d: %s", len(message), message)
