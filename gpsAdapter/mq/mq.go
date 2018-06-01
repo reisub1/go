@@ -6,6 +6,8 @@ import (
 	// mqService "github.com/surgemq/surgemq/service"
 )
 
+// Connects to the given broker with the username set as the accesstoken for ThingsBoard
+// Returns a client object which must be stored to reuse this connection
 func Connect(broker string, access_token string) (*mqtt.Client, error) {
 	var e error
 
@@ -25,6 +27,7 @@ func Connect(broker string, access_token string) (*mqtt.Client, error) {
 	return &client, e
 }
 
+// A simple wrapper around Paho.Mqtt.Golang that publishes the message to the topic, given the client
 func Publish(c *mqtt.Client, message string, topic string) error {
 	var e error
 	if token := (*c).Publish(topic, 0, false, message); token.Wait() && token.Error() != nil {
