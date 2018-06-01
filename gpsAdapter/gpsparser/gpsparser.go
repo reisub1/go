@@ -129,7 +129,7 @@ AIS140Parse:
 		var jsonBuffer bytes.Buffer
 		jsonBuffer.WriteString("{") // Start the Json Object
 		// Add whatever we've parsed so far into the JSON Object
-		jsonBuffer.WriteString(fmt.Sprintf(`"%s":[{"ts":%d,"values":{"lat":%f,"lng":%f`, g.Uniqid, g.TS_Millis, g.ActualLat, g.ActualLng))
+		jsonBuffer.WriteString(fmt.Sprintf(`"%s":[{"ts":%d,"values":{"latitude":%f,"longitude":%f`, g.Uniqid, g.TS_Millis, g.ActualLat, g.ActualLng))
 		//Note that no comma has been inserted at the end
 
 		// Now each packetType has its own specific parameters and syntax
