@@ -4,10 +4,10 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -56,6 +56,7 @@ var deviceStatus = struct {
 func main() {
 	setUpLogging()
 	signalHandler()
+	log.Info("Runtime GoMAXPROCS = ", runtime.GOMAXPROCS(0))
 
 	// Connect to the MQTT broker
 	c, e = mq.Connect(MQTTHOST, ACCESSTOKEN)
@@ -81,7 +82,7 @@ func main() {
 
 	// Perform this action whenever a new connection is received
 	events.Opened = func(id int, info evio.Info) (_ []byte, _ evio.Options, _ evio.Action) {
-		log.Infof("Connection %d launched %s -> %s", id, info.RemoteAddr, info.LocalAddr)
+		// log.Infof("Connection %d launched %s -> %s", id, info.RemoteAddr, info.LocalAddr)
 		return
 	}
 
@@ -90,7 +91,7 @@ func main() {
 
 	// Perform this action whenever a connection closes
 	events.Closed = func(id int, _ error) (_ evio.Action) {
-		log.Infof("Connection %d closed", id)
+		// log.Infof("Connection %d closed", id)
 		return
 	}
 
@@ -108,7 +109,7 @@ func dataHandler(id int, in []byte) (out []byte, action evio.Action) {
 	message := strings.TrimRight(string(in), "\n")
 
 	// Log the message for debugging
-	log.Infof("Received message of length %d: %s", len(message), message)
+	// log.Infof("Received message of length %d: %s", len(message), message)
 
 	// Hand off the message pointer to Parse function, it will put any parsed data it finds on the
 	// parsedChannel
@@ -146,23 +147,19 @@ var log = logging.MustGetLogger("server")
 
 // In short this function just sets up colourful logging with a fixed format
 func setUpLogging() {
-	verbosePtr := flag.Bool("v", false, "Verbose output")
-	flag.Parse()
-	f, err := os.Create("/var/log/tbBridge.log")
+	f, err := os.Create("/var/log/gpsAdapter.log")
 	if err != nil {
 		println("Unable to open log file, only logging to stderr")
 	}
 
-	if !*verbosePtr {
-		logStderr := logging.NewLogBackend(os.Stderr, "", 0)
-		logfile := logging.NewLogBackend(f, "", 0)
-		var format = logging.MustStringFormatter(
-			`%{color}%{id:0d} %{time:15:04:05.000} %{shortfunc} -> %{level:s} | %{message}%{color:reset}`,
-		)
-		Formatted := logging.NewBackendFormatter(logStderr, format)
-		FormattedFile := logging.NewBackendFormatter(logfile, format)
-		logging.SetBackend(Formatted, FormattedFile)
-	}
+	logStderr := logging.NewLogBackend(os.Stderr, "", 0)
+	logfile := logging.NewLogBackend(f, "", 0)
+	var format = logging.MustStringFormatter(
+		`%{color}%{id:0d} %{time:15:04:05.000} %{shortfunc} -> %{level:s} | %{message}%{color:reset}`,
+	)
+	Formatted := logging.NewBackendFormatter(logStderr, format)
+	FormattedFile := logging.NewBackendFormatter(logfile, format)
+	logging.SetBackend(Formatted, FormattedFile)
 }
 
 // Handle SIGINT by sending disconnect request to the MQTT Gateway Broker
