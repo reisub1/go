@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 
@@ -54,6 +55,12 @@ var deviceStatus = struct {
 }{connected: make(map[string]bool)}
 
 func main() {
+	f, err := os.Create("prof")
+	if err != nil {
+		log.Fatal(err)
+	}
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 	setUpLogging()
 	signalHandler()
 	log.Info("Runtime GoMAXPROCS = ", runtime.GOMAXPROCS(0))
